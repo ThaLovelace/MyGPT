@@ -16,7 +16,6 @@ export const AppContextProvider = ({ children }) => {
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
   const [token, setToken] = useState(localStorage.getItem("token") || null);
   const [loadingUser, setLoadingUser] = useState(true);
-
   const [isInitialized, setIsInitialized] = useState(false);
 
   // ---------------- fetch user ----------------
@@ -34,6 +33,7 @@ export const AppContextProvider = ({ children }) => {
 
       if (data.success) {
         setUser(data.user);
+        await fetchUserChats(data.user); // 🔹 ส่ง user ตัวจริงไป
       } else {
         toast.error(data.message);
         handleLogout();
@@ -46,62 +46,51 @@ export const AppContextProvider = ({ children }) => {
     }
   };
 
-  // ---------------- fetch chats ----------------
-  const fetchUserChats = async () => {
-    if (!token || !user) return;
-
+  // ---------------- fetch chats & create first chat ----------------
+  const fetchUserChats = async (currentUser) => {
+    if (!token || !currentUser) return;
+  
     try {
       const { data } = await axios.get("/api/chat/get", {
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (data.success) {
-        const userChats = data.chats || [];
-        setChats(userChats);
-
-        const savedChatId = localStorage.getItem("selectedChatId");
-        const savedChat = userChats.find((chat) => chat._id === savedChatId);
-
-        if (savedChat) {
-          setSelectedChats(savedChat);
+  
+      const userChats = data.success ? data.data || [] : [];
+  
+      if (userChats.length === 0) {
+        // user ใหม่ → สร้าง chat ครั้งแรก
+        const { data: newChatData } = await axios.get("/api/chat/create", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+  
+        if (newChatData.success) {
+          const chat = newChatData.data;
+          setChats([chat]);
+          setSelectedChats(chat);
+          localStorage.setItem("selectedChatId", chat._id);
           navigate("/");
-        } else if (userChats.length > 0) {
-          const mostRecentChat = userChats[0];
-          setSelectedChats(mostRecentChat);
-          localStorage.setItem("selectedChatId", mostRecentChat._id);
-          navigate("/");
-        } else {
-          await createFirstChat();
         }
       } else {
-        toast.error(data.message);
+        // user เก่า → เลือก chat เดิมหรือ chat ล่าสุด
+        setChats(userChats);
+        const savedChatId = localStorage.getItem("selectedChatId");
+        const chatToSelect =
+          savedChatId && userChats.find((c) => c._id === savedChatId)
+            ? userChats.find((c) => c._id === savedChatId)
+            : [...userChats].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
+  
+        setSelectedChats(chatToSelect);
+        localStorage.setItem("selectedChatId", chatToSelect._id);
+        navigate("/");
       }
-    } catch {
+    } catch (err) {
       toast.error("Failed to load chats");
+      console.error(err);
     } finally {
       setIsInitialized(true);
     }
   };
-
-  // ---------------- create first chat ----------------
-  const createFirstChat = async () => {
-    try {
-      const { data: newChatData } = await axios.get("/api/chat/create", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (newChatData.success) {
-        const chat = newChatData.data;
-        setChats([chat]);
-        setSelectedChats(chat);
-        localStorage.setItem("selectedChatId", chat._id);
-        navigate("/");
-      }
-    } catch {
-      toast.error("Failed to create chat");
-    }
-  };
-
+  
   // ---------------- create new chat ----------------
   const createNewChat = async () => {
     if (!user) return toast.error("Login to create a new chat");
@@ -144,14 +133,8 @@ export const AppContextProvider = ({ children }) => {
 
       const { data } = await axios.post(
         endpoint,
-        {
-          prompt,
-          chatId: selectedChats._id,
-          isPublished: isImage ? false : undefined,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { prompt, chatId: selectedChats._id, isPublished: isImage ? false : undefined },
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (data.success) {
@@ -180,29 +163,28 @@ export const AppContextProvider = ({ children }) => {
   // ---------------- delete chat ----------------
   const deleteChat = async (chatId) => {
     try {
-      const { data } = await axios.delete(`/api/chat/delete/${chatId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
+      const { data } = await axios.post(
+        "/api/chat/delete",
+        { chatId }, // 🔹 ส่ง body
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+  
       if (data.success) {
-        setChats((prev) => prev.filter((chat) => chat._id !== chatId));
-
+        setChats(prev => prev.filter(chat => chat._id !== chatId));
+  
         if (selectedChats?._id === chatId) {
           setSelectedChats(null);
           localStorage.removeItem("selectedChatId");
-
-          const remainingChats = chats.filter((chat) => chat._id !== chatId);
-          if (remainingChats.length > 0) {
-            selectChat(remainingChats[0]);
-          }
+          const remainingChats = chats.filter(c => c._id !== chatId);
+          if (remainingChats.length > 0) selectChat(remainingChats[0]);
         }
-
+  
         toast.success("Chat deleted");
       }
     } catch {
       toast.error("Failed to delete chat");
     }
-  };
+  };  
 
   // ---------------- logout ----------------
   const handleLogout = () => {
@@ -225,19 +207,10 @@ export const AppContextProvider = ({ children }) => {
   // ---------------- restore chat on mount ----------------
   useEffect(() => {
     const savedChatId = localStorage.getItem("selectedChatId");
-    if (savedChatId) {
-      setSelectedChats({ _id: savedChatId }); // temp state
-    }
+    if (savedChatId) setSelectedChats({ _id: savedChatId });
   }, []);
 
-  // ---------------- fetch chats when user is ready ----------------
-  useEffect(() => {
-    if (user && !isInitialized) {
-      fetchUserChats();
-    }
-  }, [user, isInitialized]);
-
-  // ---------------- fetch user when token changes ----------------
+  // ---------------- fetch user on token change ----------------
   useEffect(() => {
     fetchUser();
   }, [token]);

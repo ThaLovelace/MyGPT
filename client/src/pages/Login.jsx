@@ -9,14 +9,14 @@ const Login = () => {
     const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     
-    const { axios, setToken, navigate } = useAppContext();
+    const { axios, setToken } = useAppContext(); // ❌ เอา navigate ออก ไม่ใช้ที่นี่
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         
         if (isLoading) return;
-        
         setIsLoading(true);
+
         const url = state === "login" ? '/api/user/login' : '/api/user/register';
 
         try {
@@ -31,7 +31,7 @@ const Login = () => {
             if (data.success) {
                 console.log('✅ Authentication successful');
                 
-                // 🚀 แก้ปัญหา: Set token และ navigate ไปหน้าหลัก
+                // ✅ เก็บ token
                 setToken(data.token);
                 localStorage.setItem('token', data.token);
                 
@@ -41,10 +41,9 @@ const Login = () => {
                 setName("");
                 setEmail("");
                 setPassword("");
-                
-                // 📍 สำคัญ: Navigate ไปหน้าหลักหลัง login สำเร็จ
-                navigate("/");
-                
+
+                // ❌ ไม่ต้อง navigate หรือสร้าง chat ที่นี่
+                // ปล่อยให้ AppContext เป็นคน fetchChats และเลือกแชทล่าสุดเอง
             } else {
                 toast.error(data.message || "Authentication failed");
             }
@@ -123,7 +122,7 @@ const Login = () => {
 
             {state === "register" ? (
                 <p className="text-sm">
-                    Already have account? {' '}
+                    Already have account?{' '}
                     <span 
                         onClick={() => !isLoading && setState("login")} 
                         className={`text-purple-700 cursor-pointer hover:text-purple-800 ${isLoading ? 'opacity-50' : ''}`}
@@ -133,7 +132,7 @@ const Login = () => {
                 </p>
             ) : (
                 <p className="text-sm">
-                    Create an account? {' '}
+                    Create an account?{' '}
                     <span 
                         onClick={() => !isLoading && setState("register")} 
                         className={`text-purple-700 cursor-pointer hover:text-purple-800 ${isLoading ? 'opacity-50' : ''}`}

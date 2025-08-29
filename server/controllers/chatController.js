@@ -4,21 +4,21 @@ import Chat from "../models/Chat.js"
 // Create new chat
 export const createChat = async (req, res) => {
     try {
-        const userId = req.user._id
-
-        const chatData = {
-            userId,
-            messages: [],
-            name: "New Chat",
-            userName: req.user.name
-        }
-
-        const newChat = await Chat.create(chatData)
-        res.status(201).json({ success: true, data: newChat })
+      const userId = req.user._id;
+  
+      const chatData = {
+        userId,
+        messages: [],
+        name: "New Chat",
+        userName: req.user.name
+      };
+  
+      const newChat = await Chat.create(chatData); // ✅ สร้างใหม่ทุกครั้ง
+      res.status(201).json({ success: true, data: newChat });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message })
+      res.status(500).json({ success: false, message: error.message });
     }
-}
+  };  
 
 // Get all chats
 export const getChat = async (req, res) => {
