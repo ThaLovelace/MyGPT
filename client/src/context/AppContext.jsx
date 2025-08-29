@@ -33,7 +33,7 @@ export const AppContextProvider = ({ children }) => {
 
       if (data.success) {
         setUser(data.user);
-        await fetchUserChats(data.user); // 🔹 ส่ง user ตัวจริงไป
+        await fetchUserChats(data.user);
       } else {
         toast.error(data.message);
         handleLogout();
@@ -49,20 +49,20 @@ export const AppContextProvider = ({ children }) => {
   // ---------------- fetch chats & create first chat ----------------
   const fetchUserChats = async (currentUser) => {
     if (!token || !currentUser) return;
-  
+
     try {
       const { data } = await axios.get("/api/chat/get", {
         headers: { Authorization: `Bearer ${token}` },
       });
-  
+
       const userChats = data.success ? data.data || [] : [];
-  
+
       if (userChats.length === 0) {
         // user ใหม่ → สร้าง chat ครั้งแรก
         const { data: newChatData } = await axios.get("/api/chat/create", {
           headers: { Authorization: `Bearer ${token}` },
         });
-  
+
         if (newChatData.success) {
           const chat = newChatData.data;
           setChats([chat]);
@@ -77,8 +77,10 @@ export const AppContextProvider = ({ children }) => {
         const chatToSelect =
           savedChatId && userChats.find((c) => c._id === savedChatId)
             ? userChats.find((c) => c._id === savedChatId)
-            : [...userChats].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
-  
+            : [...userChats].sort(
+                (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)
+              )[0];
+
         setSelectedChats(chatToSelect);
         localStorage.setItem("selectedChatId", chatToSelect._id);
         navigate("/");
@@ -90,7 +92,7 @@ export const AppContextProvider = ({ children }) => {
       setIsInitialized(true);
     }
   };
-  
+
   // ---------------- create new chat ----------------
   const createNewChat = async () => {
     if (!user) return toast.error("Login to create a new chat");
@@ -121,70 +123,35 @@ export const AppContextProvider = ({ children }) => {
     navigate("/");
   };
 
-  // ---------------- send message ----------------
-  const sendMessage = async (prompt, isImage = false) => {
-    if (!selectedChats) {
-      toast.error("No active chat");
-      return;
-    }
-
-    try {
-      const endpoint = isImage ? "/api/message/image" : "/api/message/text";
-
-      const { data } = await axios.post(
-        endpoint,
-        { prompt, chatId: selectedChats._id, isPublished: isImage ? false : undefined },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (data.success) {
-        setSelectedChats((prev) => ({
-          ...prev,
-          messages: [...prev.messages, data.userMessage, data.reply],
-        }));
-
-        setChats((prev) =>
-          prev.map((chat) =>
-            chat._id === selectedChats._id
-              ? { ...chat, messages: [...chat.messages, data.userMessage, data.reply] }
-              : chat
-          )
-        );
-
-        return data;
-      } else {
-        throw new Error(data.message);
-      }
-    } catch {
-      toast.error("Failed to send message");
-    }
-  };
-
   // ---------------- delete chat ----------------
   const deleteChat = async (chatId) => {
     try {
       const { data } = await axios.post(
         "/api/chat/delete",
-        { chatId }, // 🔹 ส่ง body
+        { chatId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-  
+
       if (data.success) {
-        setChats(prev => prev.filter(chat => chat._id !== chatId));
-  
+        const remainingChats = chats.filter((c) => c._id !== chatId);
+        setChats(remainingChats);
+
         if (selectedChats?._id === chatId) {
-          setSelectedChats(null);
-          localStorage.removeItem("selectedChatId");
-          const remainingChats = chats.filter(c => c._id !== chatId);
-          if (remainingChats.length > 0) selectChat(remainingChats[0]);
+          const nextChat = remainingChats.length > 0 ? remainingChats[0] : null;
+          setSelectedChats(nextChat);
+          if (nextChat) {
+            localStorage.setItem("selectedChatId", nextChat._id);
+          } else {
+            localStorage.removeItem("selectedChatId");
+          }
         }
-  
+
         toast.success("Chat deleted");
       }
     } catch {
       toast.error("Failed to delete chat");
     }
-  };  
+  };
 
   // ---------------- logout ----------------
   const handleLogout = () => {
@@ -232,11 +199,10 @@ export const AppContextProvider = ({ children }) => {
     createNewChat,
     deleteChat,
     fetchUserChats,
-    sendMessage,
     isInitialized,
     theme,
     setTheme,
-    axios,
+    axios, // 🔹 export axios ไปใช้ตรงๆ ใน ChatBox
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
