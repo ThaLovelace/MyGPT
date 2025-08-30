@@ -143,3 +143,30 @@ export const imageMessageController = async (req, res) => {
     });
   }
 };
+
+// API to get published images
+export const getPublishedImages = async (req, res) => {
+  try {
+    const publishedImageMessages = await Chat.aggregate([
+      { $unwind: { path: "$messages", preserveNullAndEmptyArrays: false } },
+      {
+        $match: {
+          "messages.isImage": true,
+          "messages.isPublished": true
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          imageUrl: "$messages.content",
+          userName: "$userName" // 🔹 แก้ typo
+        }
+      },
+      { $sort: { "_id": -1 } } // 🔹 เรียงล่าสุดขึ้นก่อน
+    ]);
+
+    res.json({ success: true, images: publishedImageMessages });
+  } catch (error) {
+    return res.json({ success: false, message: error.message });
+  }
+};
